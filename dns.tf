@@ -1,20 +1,13 @@
-resource "google_dns_managed_zone" "this" {
-  count = var.create_dns_managed_zone ? 1 : 0
+module "dns_managed_zone" {
+  count = var.dns_managed_zone != "" && (var.create_dns_managed_zone || var.lookup_dns_managed_zone) ? 1 : 0
 
-  description = var.dns_zone_description
-  dns_name    = var.dns_zone_dns_name != "" ? var.dns_zone_dns_name : "${trim(var.dns_main_domain, ".")}."
-  labels      = local.common_labels
+  source = "git::https://github.com/GoogleCloudPlatform/cloud-foundation-fabric.git//modules/dns?ref=v54.3.0&depth=1"
+
+  project_id  = var.gcp_project_id
   name        = var.dns_managed_zone
-  project     = var.gcp_project_id
-  visibility  = var.dns_zone_visibility
+  description = var.dns_zone_description
+  labels      = local.common_labels
+  zone_config = local.dns_zone_config
 
-  depends_on = [google_project_service.required]
+  depends_on = [module.project_services]
 }
-
-data "google_dns_managed_zone" "existing" {
-  count = var.lookup_dns_managed_zone && !var.create_dns_managed_zone && var.dns_managed_zone != "" ? 1 : 0
-
-  name    = var.dns_managed_zone
-  project = var.gcp_project_id
-}
-

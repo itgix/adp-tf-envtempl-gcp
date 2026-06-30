@@ -2,14 +2,15 @@
 
 This repository is the GCP landing-zone and ADP platform Terraform template for
 `idp-installer-gcp`. It mirrors the intent of the AWS environment template with
-native Google Cloud resources.
+Google Cloud resources, primarily via Google Cloud Foundation Fabric modules.
 
 ## What It Creates
 
 - Google APIs required by the selected components.
 - VPC, GKE subnet, secondary pod/service ranges, Cloud NAT, and private service
-  access.
-- Standard or Autopilot GKE with Workload Identity.
+  access through Cloud Foundation Fabric.
+- Standard or Autopilot GKE with Workload Identity through Cloud Foundation
+  Fabric.
 - Default Workload Identity service accounts for `external-dns`,
   `cert-manager`, and `external-secrets`.
 - Artifact Registry repositories for platform images.
@@ -90,6 +91,16 @@ Several AWS template variable/output names are accepted as compatibility aliases
 Prefer the GCP-native variable names for new environments.
 
 ## Notes
+
+The selected Cloud Foundation Fabric release requires Terraform `>= 1.12.2`.
+This template defaults `terraform_ver` to `1.15.7`; set `terraform_ver:
+"1.15.7"` or another compatible newer version in `idp-installer-gcp` configs so
+the installer downloads and uses a compatible binary.
+
+The template pins Terraform providers to the latest resolved stable versions:
+`hashicorp/google` `7.38.0`, `hashicorp/google-beta` `7.38.0`, and
+`hashicorp/random` `3.9.0`. `google-beta` is required by the selected Cloud
+Foundation Fabric modules.
 
 Deletion protection defaults to `false` for GKE and Cloud SQL so
 `idp-installer-gcp/cleanup.sh --tf-destroy` can tear environments down. Turn it

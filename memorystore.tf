@@ -16,8 +16,7 @@ resource "google_redis_instance" "redis" {
   tier                    = var.memorystore_tier
 
   depends_on = [
-    google_project_service.required,
-    google_service_networking_connection.private_services,
+    module.project_services,
+    module.vpc,
   ]
 }
-

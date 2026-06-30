@@ -35,6 +35,5 @@ resource "google_compute_security_policy" "application" {
     }
   }
 
-  depends_on = [google_project_service.required]
+  depends_on = [module.project_services]
 }
-

@@ -7,24 +7,11 @@ resource "random_password" "custom_secrets" {
   keepers          = merge(try(var.custom_secret_keepers[each.key], {}), try(each.value.keepers, {}))
 }
 
-resource "google_secret_manager_secret" "custom" {
-  for_each = local.custom_secrets_by_name
+module "secret_manager" {
+  source = "git::https://github.com/GoogleCloudPlatform/cloud-foundation-fabric.git//modules/secret-manager?ref=v54.3.0&depth=1"
 
-  labels    = local.common_labels
-  project   = var.gcp_project_id
-  secret_id = "${local.secret_prefix}${each.value.secret_name}"
+  project_id = var.gcp_project_id
+  secrets    = local.secret_manager_secrets
 
-  replication {
-    auto {}
-  }
-
-  depends_on = [google_project_service.required]
+  depends_on = [module.project_services]
 }
-
-resource "google_secret_manager_secret_version" "custom" {
-  for_each = local.custom_secret_payloads
-
-  secret      = google_secret_manager_secret.custom[each.key].id
-  secret_data = each.value
-}
-

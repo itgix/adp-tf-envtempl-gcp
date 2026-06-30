@@ -5,7 +5,7 @@
 variable "terraform_ver" {
   type        = string
   description = "Terraform version used by idp-installer-gcp. Kept as an allowed config key for generated tfvars."
-  default     = "1.11.4"
+  default     = "1.15.7"
 }
 
 variable "gcp_project_id" {
@@ -48,7 +48,7 @@ variable "resources_tags" {
 
 variable "enable_project_services" {
   type        = bool
-  description = "Enable required Google APIs with google_project_service."
+  description = "Enable required Google APIs with the Cloud Foundation Fabric project module."
   default     = true
 }
 
@@ -136,8 +136,14 @@ variable "private_service_access_enabled" {
 
 variable "private_service_access_prefix_length" {
   type        = number
-  description = "Prefix length for the private service access allocated range."
+  description = "Compatibility input for native PSA allocation. Fabric-backed networking uses private_service_access_cidr."
   default     = 16
+}
+
+variable "private_service_access_cidr" {
+  type        = string
+  description = "CIDR reserved for Private Service Access peering."
+  default     = "10.54.0.0/16"
 }
 
 variable "enable_cloud_nat" {
@@ -868,4 +874,3 @@ variable "custom_terraform_vars" {
   description = "Object of custom values for extra Terraform files outside the template."
   default     = {}
 }
-

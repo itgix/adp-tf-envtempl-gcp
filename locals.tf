@@ -76,18 +76,29 @@ locals {
   gke_pods_secondary_range_name = var.gke_pods_secondary_range_name
   gke_svcs_secondary_range_name = var.gke_services_secondary_range_name
 
-  vpc_network_id        = var.provision_vpc ? google_compute_network.this[0].id : var.vpc_network_self_link
-  vpc_network_self_link = var.provision_vpc ? google_compute_network.this[0].self_link : var.vpc_network_self_link
-  gke_subnet_id         = var.provision_vpc ? google_compute_subnetwork.gke[0].id : var.vpc_subnetwork_self_link
-  gke_subnet_self_link  = var.provision_vpc ? google_compute_subnetwork.gke[0].self_link : var.vpc_subnetwork_self_link
+  gke_subnet_module_key = "${var.region}/${local.gke_subnet_name}"
+  vpc_network_id        = var.provision_vpc ? module.vpc[0].id : var.vpc_network_self_link
+  vpc_network_name      = var.provision_vpc ? module.vpc[0].name : local.network_name
+  vpc_network_self_link = var.provision_vpc ? module.vpc[0].self_link : var.vpc_network_self_link
+  gke_subnet_id         = var.provision_vpc ? module.vpc[0].subnet_ids[local.gke_subnet_module_key] : var.vpc_subnetwork_self_link
+  gke_subnet_self_link  = var.provision_vpc ? module.vpc[0].subnet_self_links[local.gke_subnet_module_key] : var.vpc_subnetwork_self_link
 
   gke_location                = var.gke_location != "" ? var.gke_location : var.region
   gke_cluster_name            = var.gke_cluster_name != "" ? var.gke_cluster_name : "gke-${local.resource_prefix}"
   gke_node_service_account_id = trim(substr("gke-node-${local.resource_prefix}", 0, 30), "-")
   gke_node_tag                = "gke-${local.resource_prefix}"
   gke_node_service_account_email = var.gke_node_service_account_email != "" ? var.gke_node_service_account_email : (
-    local.provision_gke && !var.gke_autopilot_enabled ? google_service_account.gke_nodes[0].email : null
+    local.provision_gke && !var.gke_autopilot_enabled ? module.gke_node_service_account[0].email : null
   )
+  gke_cluster_output_name = local.provision_gke ? (
+    var.gke_autopilot_enabled ? module.gke_autopilot[0].name : module.gke_standard[0].name
+  ) : null
+  gke_cluster_output_endpoint = local.provision_gke ? (
+    var.gke_autopilot_enabled ? module.gke_autopilot[0].endpoint : module.gke_standard[0].endpoint
+  ) : null
+  gke_cluster_output_ca_certificate = local.provision_gke ? (
+    var.gke_autopilot_enabled ? module.gke_autopilot[0].ca_certificate : module.gke_standard[0].ca_certificate
+  ) : null
 
   default_artifact_registry_repositories = {
     platform = {
@@ -130,6 +141,75 @@ locals {
   custom_secret_payloads = merge(
     { for name, password in random_password.custom_secrets : name => password.result },
     local.manual_custom_secret_values
+  )
+
+  custom_secret_ids        = { for name, secret in local.custom_secrets_by_name : name => "${local.secret_prefix}${secret.secret_name}" }
+  cloudsql_instance_name   = var.cloudsql_instance_name != "" ? var.cloudsql_instance_name : "sql-${local.resource_prefix}"
+  cloudsql_admin_secret_id = "${local.secret_prefix}cloudsql-${var.cloudsql_default_username}-password"
+  cloudsql_extra_secret_id = "${local.secret_prefix}cloudsql-${var.cloudsql_extra_credentials.username}-password"
+  cloudsql_extra_password = local.create_cloudsql_postgres && var.cloudsql_create_extra_user ? (
+    try(var.cloudsql_extra_credentials.password, null) != null ? var.cloudsql_extra_credentials.password : random_password.cloudsql_extra[0].result
+  ) : null
+  cloudsql_database_flags_map = {
+    for flag in var.cloudsql_database_flags : flag.name => flag.value
+  }
+  cloudsql_authorized_networks_map = {
+    for network in var.cloudsql_authorized_networks : network.name => network.value
+  }
+  cloudsql_databases = compact(distinct(concat(
+    [var.cloudsql_database_name],
+    var.cloudsql_create_extra_user ? [var.cloudsql_extra_credentials.database] : []
+  )))
+  cloudsql_users = local.create_cloudsql_postgres ? merge(
+    {
+      (var.cloudsql_default_username) = {
+        password = random_password.cloudsql_admin[0].result
+        type     = "BUILT_IN"
+      }
+    },
+    var.cloudsql_create_extra_user ? {
+      (var.cloudsql_extra_credentials.username) = {
+        password = local.cloudsql_extra_password
+        type     = "BUILT_IN"
+      }
+    } : {}
+  ) : {}
+
+  secret_manager_custom_secrets = {
+    for name, secret_id in local.custom_secret_ids : secret_id => {
+      labels = local.common_labels
+      versions = contains(keys(local.custom_secret_payloads), name) ? {
+        initial = {
+          data = local.custom_secret_payloads[name]
+        }
+      } : {}
+    }
+  }
+  secret_manager_cloudsql_secrets = local.create_cloudsql_postgres ? merge(
+    {
+      (local.cloudsql_admin_secret_id) = {
+        labels = local.common_labels
+        versions = {
+          initial = {
+            data = random_password.cloudsql_admin[0].result
+          }
+        }
+      }
+    },
+    var.cloudsql_create_extra_user ? {
+      (local.cloudsql_extra_secret_id) = {
+        labels = local.common_labels
+        versions = {
+          initial = {
+            data = local.cloudsql_extra_password
+          }
+        }
+      }
+    } : {}
+  ) : {}
+  secret_manager_secrets = merge(
+    local.secret_manager_custom_secrets,
+    local.secret_manager_cloudsql_secrets
   )
 
   default_workload_identity_bindings = var.create_default_workload_identity_bindings ? {
@@ -196,6 +276,26 @@ locals {
 
   effective_pubsub_topics        = local.create_pubsub ? merge(local.legacy_pubsub_topics, var.pubsub_topics) : {}
   effective_pubsub_subscriptions = local.create_pubsub ? merge(local.legacy_pubsub_subscriptions, var.pubsub_subscriptions) : {}
+  pubsub_subscriptions_by_topic = {
+    for topic_key, topic in local.effective_pubsub_topics : topic_key => {
+      for sub_key, sub in local.effective_pubsub_subscriptions : try(sub.name, sub_key) => {
+        ack_deadline_seconds       = try(sub.ack_deadline_seconds, 20)
+        labels                     = merge(local.common_labels, try(sub.labels, {}))
+        message_retention_duration = try(sub.message_retention_duration, "604800s")
+        retain_acked_messages      = try(sub.retain_acked_messages, false)
+      }
+      if try(sub.topic, "") == topic_key || try(sub.topic, "") == try(topic.name, topic_key)
+    }
+  }
+
+  dns_zone_domain = var.dns_zone_dns_name != "" ? var.dns_zone_dns_name : "${trim(var.dns_main_domain, ".")}."
+  dns_zone_config = var.create_dns_managed_zone ? {
+    domain = local.dns_zone_domain
+    private = var.dns_zone_visibility == "private" ? {
+      client_networks = [local.vpc_network_self_link]
+    } : null
+    public = var.dns_zone_visibility == "private" ? null : {}
+  } : null
 
   required_project_services = toset(distinct(concat(
     [

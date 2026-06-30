@@ -10,7 +10,7 @@ output "gcp_project_id" {
 
 output "vpc_network_name" {
   description = "VPC network name."
-  value       = var.provision_vpc ? google_compute_network.this[0].name : null
+  value       = var.provision_vpc ? module.vpc[0].name : null
 }
 
 output "vpc_network_self_link" {
@@ -20,7 +20,7 @@ output "vpc_network_self_link" {
 
 output "gke_subnet_name" {
   description = "GKE subnet name."
-  value       = var.provision_vpc ? google_compute_subnetwork.gke[0].name : null
+  value       = var.provision_vpc ? local.gke_subnet_name : null
 }
 
 output "gke_subnet_self_link" {
@@ -40,27 +40,27 @@ output "gke_services_secondary_range_name" {
 
 output "gke_cluster_name" {
   description = "GKE cluster name used by idp-installer-gcp."
-  value       = local.provision_gke ? (var.gke_autopilot_enabled ? google_container_cluster.autopilot[0].name : google_container_cluster.standard[0].name) : null
+  value       = local.gke_cluster_output_name
 }
 
 output "cluster_name" {
   description = "Cluster name alias for GitOps compatibility."
-  value       = local.provision_gke ? (var.gke_autopilot_enabled ? google_container_cluster.autopilot[0].name : google_container_cluster.standard[0].name) : null
+  value       = local.gke_cluster_output_name
 }
 
 output "kubernetes_cluster_name" {
   description = "Cluster name alias for GitOps compatibility."
-  value       = local.provision_gke ? (var.gke_autopilot_enabled ? google_container_cluster.autopilot[0].name : google_container_cluster.standard[0].name) : null
+  value       = local.gke_cluster_output_name
 }
 
 output "gke_cluster_endpoint" {
   description = "GKE cluster HTTPS endpoint."
-  value       = local.provision_gke ? "https://${var.gke_autopilot_enabled ? google_container_cluster.autopilot[0].endpoint : google_container_cluster.standard[0].endpoint}" : null
+  value       = local.gke_cluster_output_endpoint != null ? "https://${local.gke_cluster_output_endpoint}" : null
 }
 
 output "gke_cluster_ca_certificate" {
   description = "GKE cluster CA certificate."
-  value       = local.provision_gke ? (var.gke_autopilot_enabled ? google_container_cluster.autopilot[0].master_auth[0].cluster_ca_certificate : google_container_cluster.standard[0].master_auth[0].cluster_ca_certificate) : null
+  value       = local.gke_cluster_output_ca_certificate
   sensitive   = true
 }
 
@@ -87,7 +87,7 @@ output "gke_node_service_account_email" {
 output "workload_identity_service_accounts" {
   description = "Created Workload Identity service accounts and Kubernetes annotations."
   value = {
-    for name, service_account in google_service_account.workload_identity : name => {
+    for name, service_account in module.workload_identity_service_accounts : name => {
       email      = service_account.email
       member     = local.workload_identity_members[name]
       namespace  = local.workload_identity_bindings_normalized[name].namespace
@@ -99,60 +99,60 @@ output "workload_identity_service_accounts" {
 
 output "external_dns_service_account_email" {
   description = "GCP service account email for external-dns."
-  value       = try(google_service_account.workload_identity["external-dns"].email, null)
+  value       = try(module.workload_identity_service_accounts["external-dns"].email, null)
 }
 
 output "cert_manager_service_account_email" {
   description = "GCP service account email for cert-manager."
-  value       = try(google_service_account.workload_identity["cert-manager"].email, null)
+  value       = try(module.workload_identity_service_accounts["cert-manager"].email, null)
 }
 
 output "external_secrets_service_account_email" {
   description = "GCP service account email for external-secrets."
-  value       = try(google_service_account.workload_identity["external-secrets"].email, null)
+  value       = try(module.workload_identity_service_accounts["external-secrets"].email, null)
 }
 
 output "artifact_registry_repository_names" {
   description = "Artifact Registry repository names."
-  value       = { for key, repo in google_artifact_registry_repository.repositories : key => repo.repository_id }
+  value       = { for key, repo in local.effective_artifact_registry_repositories : key => try(repo.repository_id, key) }
 }
 
 output "artifact_registry_repository_urls" {
   description = "Artifact Registry repository URLs for Docker repositories."
   value = {
-    for key, repo in google_artifact_registry_repository.repositories :
-    key => "${repo.location}-docker.pkg.dev/${var.gcp_project_id}/${repo.repository_id}"
-    if repo.format == "DOCKER"
+    for key, repo in module.artifact_registry :
+    key => repo.url
+    if upper(try(local.effective_artifact_registry_repositories[key].format, "DOCKER")) == "DOCKER"
   }
 }
 
 output "ecr_repository_names" {
   description = "AWS compatibility alias for Artifact Registry repository names."
-  value       = { for key, repo in google_artifact_registry_repository.repositories : key => repo.repository_id }
+  value       = { for key, repo in local.effective_artifact_registry_repositories : key => try(repo.repository_id, key) }
 }
 
 output "ecr_repository_urls_map" {
   description = "AWS compatibility alias for Artifact Registry repository URLs."
   value = {
-    for key, repo in google_artifact_registry_repository.repositories :
-    key => "${repo.location}-docker.pkg.dev/${var.gcp_project_id}/${repo.repository_id}"
-    if repo.format == "DOCKER"
+    for key, repo in module.artifact_registry :
+    key => repo.url
+    if upper(try(local.effective_artifact_registry_repositories[key].format, "DOCKER")) == "DOCKER"
   }
 }
 
 output "custom_secret_names" {
   description = "Secret Manager custom secret IDs."
-  value       = { for key, secret in google_secret_manager_secret.custom : key => secret.secret_id }
+  value       = local.custom_secret_ids
 }
 
 output "custom_secret_ids" {
   description = "Secret Manager custom secret resource IDs."
-  value       = { for key, secret in google_secret_manager_secret.custom : key => secret.id }
+  value       = { for name, secret_id in local.custom_secret_ids : name => try(module.secret_manager.ids[secret_id], null) }
 }
 
 output "custom_secret_versions" {
   description = "Secret Manager custom secret versions."
-  value       = { for key, version in google_secret_manager_secret_version.custom : key => version.name }
+  value       = { for name, secret_id in local.custom_secret_ids : name => try(module.secret_manager.version_ids["${secret_id}/initial"], null) }
 }
 
 output "custom_secret_values" {
@@ -163,47 +163,47 @@ output "custom_secret_values" {
 
 output "cloudsql_instance_name" {
   description = "Cloud SQL instance name."
-  value       = local.create_cloudsql_postgres ? google_sql_database_instance.postgres[0].name : null
+  value       = local.create_cloudsql_postgres ? module.cloudsql_postgres[0].name : null
 }
 
 output "cloudsql_connection_name" {
   description = "Cloud SQL connection name."
-  value       = local.create_cloudsql_postgres ? google_sql_database_instance.postgres[0].connection_name : null
+  value       = local.create_cloudsql_postgres ? module.cloudsql_postgres[0].connection_name : null
 }
 
 output "cloudsql_private_ip_address" {
   description = "Cloud SQL private IP address."
-  value       = local.create_cloudsql_postgres ? google_sql_database_instance.postgres[0].private_ip_address : null
+  value       = local.create_cloudsql_postgres ? module.cloudsql_postgres[0].ip : null
 }
 
 output "cloudsql_database_name" {
   description = "Cloud SQL default database name."
-  value       = local.create_cloudsql_postgres && var.cloudsql_database_name != "" ? google_sql_database.main[0].name : null
+  value       = local.create_cloudsql_postgres && var.cloudsql_database_name != "" ? var.cloudsql_database_name : null
 }
 
 output "cloudsql_admin_secret_name" {
   description = "Secret Manager secret containing the Cloud SQL admin password."
-  value       = local.create_cloudsql_postgres ? google_secret_manager_secret.cloudsql_admin[0].secret_id : null
+  value       = local.create_cloudsql_postgres ? local.cloudsql_admin_secret_id : null
 }
 
 output "cloudsql_extra_secret_name" {
   description = "Secret Manager secret containing the Cloud SQL extra user password."
-  value       = local.create_cloudsql_postgres && var.cloudsql_create_extra_user ? google_secret_manager_secret.cloudsql_extra[0].secret_id : null
+  value       = local.create_cloudsql_postgres && var.cloudsql_create_extra_user ? local.cloudsql_extra_secret_id : null
 }
 
 output "rds_cluster_endpoint" {
   description = "AWS compatibility alias for Cloud SQL private IP."
-  value       = local.create_cloudsql_postgres ? google_sql_database_instance.postgres[0].private_ip_address : null
+  value       = local.create_cloudsql_postgres ? module.cloudsql_postgres[0].ip : null
 }
 
 output "rds_master_credentials_secret_name" {
   description = "AWS compatibility alias for the Cloud SQL admin password secret."
-  value       = local.create_cloudsql_postgres ? google_secret_manager_secret.cloudsql_admin[0].secret_id : null
+  value       = local.create_cloudsql_postgres ? local.cloudsql_admin_secret_id : null
 }
 
 output "rds_extra_credentials_secret_name" {
   description = "AWS compatibility alias for the Cloud SQL extra password secret."
-  value       = local.create_cloudsql_postgres && var.cloudsql_create_extra_user ? google_secret_manager_secret.cloudsql_extra[0].secret_id : null
+  value       = local.create_cloudsql_postgres && var.cloudsql_create_extra_user ? local.cloudsql_extra_secret_id : null
 }
 
 output "memorystore_redis_host" {
@@ -228,27 +228,34 @@ output "redis_reader_endpoint_address" {
 
 output "gcs_bucket_names" {
   description = "Created GCS bucket names."
-  value       = { for key, bucket in google_storage_bucket.buckets : key => bucket.name }
+  value       = { for key, bucket in module.gcs_buckets : key => bucket.name }
 }
 
 output "s3_bucket_names" {
   description = "AWS compatibility alias for GCS bucket names."
-  value       = { for key, bucket in google_storage_bucket.buckets : key => bucket.name }
+  value       = { for key, bucket in module.gcs_buckets : key => bucket.name }
 }
 
 output "pubsub_topic_names" {
   description = "Created Pub/Sub topic names."
-  value       = { for key, topic in google_pubsub_topic.topics : key => topic.name }
+  value       = { for key, topic in module.pubsub : key => topic.topic.name }
 }
 
 output "pubsub_subscription_names" {
   description = "Created Pub/Sub subscription names."
-  value       = { for key, subscription in google_pubsub_subscription.subscriptions : key => subscription.name }
+  value = merge(concat(
+    [{}],
+    [
+      for topic in module.pubsub : {
+        for key, subscription in topic.subscriptions : key => subscription.name
+      }
+    ]
+  )...)
 }
 
 output "firestore_database_name" {
   description = "Firestore database name."
-  value       = local.create_firestore ? google_firestore_database.this[0].name : null
+  value       = local.create_firestore ? module.firestore[0].firestore_database.name : null
 }
 
 output "dns_managed_zone" {
@@ -258,7 +265,7 @@ output "dns_managed_zone" {
 
 output "dns_managed_zone_dns_name" {
   description = "Cloud DNS managed zone DNS name when created or looked up."
-  value       = try(google_dns_managed_zone.this[0].dns_name, try(data.google_dns_managed_zone.existing[0].dns_name, null))
+  value       = try(module.dns_managed_zone[0].domain, null)
 }
 
 output "cloud_armor_policy_name" {
@@ -270,4 +277,3 @@ output "waf_webacl_arn" {
   description = "AWS compatibility alias for Cloud Armor policy self link."
   value       = local.cloud_armor_enabled ? google_compute_security_policy.application[0].self_link : null
 }
-
