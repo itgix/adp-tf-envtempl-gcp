@@ -171,6 +171,11 @@ output "cloudsql_connection_name" {
   value       = local.create_cloudsql_postgres ? module.cloudsql_postgres[0].connection_name : null
 }
 
+output "cloudsql_dns_name" {
+  description = "Cloud SQL DNS name."
+  value       = local.create_cloudsql_postgres ? module.cloudsql_postgres[0].dns_name : null
+}
+
 output "cloudsql_private_ip_address" {
   description = "Cloud SQL private IP address."
   value       = local.create_cloudsql_postgres ? module.cloudsql_postgres[0].ip : null
@@ -192,8 +197,8 @@ output "cloudsql_extra_secret_name" {
 }
 
 output "rds_cluster_endpoint" {
-  description = "AWS compatibility alias for Cloud SQL private IP."
-  value       = local.create_cloudsql_postgres ? module.cloudsql_postgres[0].ip : null
+  description = "AWS compatibility alias for the Cloud SQL DNS name."
+  value       = local.create_cloudsql_postgres ? module.cloudsql_postgres[0].dns_name : null
 }
 
 output "rds_master_credentials_secret_name" {

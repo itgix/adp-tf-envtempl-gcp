@@ -1,19 +1,3 @@
-resource "random_password" "cloudsql_admin" {
-  count = local.create_cloudsql_postgres ? 1 : 0
-
-  length           = 32
-  special          = true
-  override_special = "!#$%&*()-_=+[]{}<>:?"
-}
-
-resource "random_password" "cloudsql_extra" {
-  count = local.create_cloudsql_postgres && var.cloudsql_create_extra_user && try(var.cloudsql_extra_credentials.password, null) == null ? 1 : 0
-
-  length           = 32
-  special          = true
-  override_special = "!#$%&*()-_=+[]{}<>:?"
-}
-
 module "cloudsql_postgres" {
   count = local.create_cloudsql_postgres ? 1 : 0
 

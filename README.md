@@ -23,6 +23,12 @@ Google Cloud resources, primarily via Google Cloud Foundation Fabric modules.
 - Optional Cloud DNS managed zone creation/lookup.
 - Optional Cloud Armor security policy.
 
+## Custom Secrets
+
+`custom_secrets` supports any number of Secret Manager secrets. Set `value` to
+create an initial version from a manually supplied value, or omit `value` on a
+non-manual secret to have Terraform generate one with `random_password`.
+
 ## Installer Usage
 
 `idp-installer-gcp` reads `variables.tf` and only passes YAML config keys that

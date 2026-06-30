@@ -75,6 +75,45 @@ locals {
   gke_subnet_name               = var.gke_subnet_name != "" ? var.gke_subnet_name : "subnet-gke-${local.resource_prefix}"
   gke_pods_secondary_range_name = var.gke_pods_secondary_range_name
   gke_svcs_secondary_range_name = var.gke_services_secondary_range_name
+  default_vpc_firewall_ingress_rules = {
+    internal = {
+      deny                 = false
+      description          = "Allow internal ADP traffic."
+      destination_ranges   = []
+      disabled             = false
+      enable_logging       = null
+      priority             = 1000
+      source_ranges        = [var.vpc_cidr, var.gke_pods_secondary_cidr, var.gke_services_secondary_cidr]
+      sources              = null
+      targets              = null
+      use_service_accounts = false
+      rules = [
+        { protocol = "icmp", ports = null },
+        { protocol = "tcp", ports = ["0-65535"] },
+        { protocol = "udp", ports = ["0-65535"] },
+      ]
+    }
+    gke-health-checks = {
+      deny                 = false
+      description          = "Allow GKE and load-balancer health checks."
+      destination_ranges   = []
+      disabled             = false
+      enable_logging       = null
+      priority             = 1000
+      source_ranges        = ["35.191.0.0/16", "130.211.0.0/22"]
+      sources              = null
+      targets              = [local.gke_node_tag]
+      use_service_accounts = false
+      rules = [
+        { protocol = "tcp", ports = ["80", "443", "10256", "30000-32767"] },
+      ]
+    }
+  }
+  vpc_firewall_ingress_rules = jsondecode(
+    var.vpc_firewall_ingress_rules == null
+    ? jsonencode(local.default_vpc_firewall_ingress_rules)
+    : jsonencode(var.vpc_firewall_ingress_rules)
+  )
 
   gke_subnet_module_key = "${var.region}/${local.gke_subnet_name}"
   vpc_network_id        = var.provision_vpc ? module.vpc[0].id : var.vpc_network_self_link
@@ -130,26 +169,23 @@ locals {
 
   generated_custom_secrets = {
     for name, secret in local.custom_secrets_by_name : name => secret
-    if !try(secret.manual, false)
+    if !try(secret.manual, false) && try(secret.value, null) == null
   }
 
-  manual_custom_secret_values = {
+  provided_custom_secret_values = {
     for name, secret in local.custom_secrets_by_name : name => try(secret.value, "")
-    if try(secret.manual, false) && try(secret.value, null) != null
+    if try(secret.value, null) != null
   }
 
   custom_secret_payloads = merge(
     { for name, password in random_password.custom_secrets : name => password.result },
-    local.manual_custom_secret_values
+    local.provided_custom_secret_values
   )
 
   custom_secret_ids        = { for name, secret in local.custom_secrets_by_name : name => "${local.secret_prefix}${secret.secret_name}" }
   cloudsql_instance_name   = var.cloudsql_instance_name != "" ? var.cloudsql_instance_name : "sql-${local.resource_prefix}"
   cloudsql_admin_secret_id = "${local.secret_prefix}cloudsql-${var.cloudsql_default_username}-password"
   cloudsql_extra_secret_id = "${local.secret_prefix}cloudsql-${var.cloudsql_extra_credentials.username}-password"
-  cloudsql_extra_password = local.create_cloudsql_postgres && var.cloudsql_create_extra_user ? (
-    try(var.cloudsql_extra_credentials.password, null) != null ? var.cloudsql_extra_credentials.password : random_password.cloudsql_extra[0].result
-  ) : null
   cloudsql_database_flags_map = {
     for flag in var.cloudsql_database_flags : flag.name => flag.value
   }
@@ -163,13 +199,13 @@ locals {
   cloudsql_users = local.create_cloudsql_postgres ? merge(
     {
       (var.cloudsql_default_username) = {
-        password = random_password.cloudsql_admin[0].result
+        password = null
         type     = "BUILT_IN"
       }
     },
     var.cloudsql_create_extra_user ? {
       (var.cloudsql_extra_credentials.username) = {
-        password = local.cloudsql_extra_password
+        password = try(var.cloudsql_extra_credentials.password, null)
         type     = "BUILT_IN"
       }
     } : {}
@@ -191,7 +227,7 @@ locals {
         labels = local.common_labels
         versions = {
           initial = {
-            data = random_password.cloudsql_admin[0].result
+            data = module.cloudsql_postgres[0].user_passwords[var.cloudsql_default_username]
           }
         }
       }
@@ -201,7 +237,7 @@ locals {
         labels = local.common_labels
         versions = {
           initial = {
-            data = local.cloudsql_extra_password
+            data = module.cloudsql_postgres[0].user_passwords[var.cloudsql_extra_credentials.username]
           }
         }
       }

@@ -63,27 +63,7 @@ module "vpc_firewall" {
   default_rules_config = {
     disabled = true
   }
-  ingress_rules = {
-    internal = {
-      description   = "Allow internal ADP traffic."
-      priority      = 1000
-      source_ranges = [var.vpc_cidr, var.gke_pods_secondary_cidr, var.gke_services_secondary_cidr]
-      rules = [
-        { protocol = "icmp" },
-        { protocol = "tcp", ports = ["0-65535"] },
-        { protocol = "udp", ports = ["0-65535"] },
-      ]
-    }
-    gke-health-checks = {
-      description   = "Allow GKE and load-balancer health checks."
-      priority      = 1000
-      source_ranges = ["35.191.0.0/16", "130.211.0.0/22"]
-      targets       = [local.gke_node_tag]
-      rules = [
-        { protocol = "tcp", ports = ["80", "443", "10256", "30000-32767"] },
-      ]
-    }
-  }
+  ingress_rules = local.vpc_firewall_ingress_rules
 
   depends_on = [module.vpc]
 }

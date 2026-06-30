@@ -164,6 +164,29 @@ variable "create_internal_firewall_rules" {
   default     = true
 }
 
+variable "vpc_firewall_ingress_rules" {
+  description = "Optional complete override for Fabric net-vpc-firewall ingress_rules. Leave null to use the ADP baseline internal and health-check rules."
+  type = map(object({
+    deny               = optional(bool, false)
+    description        = optional(string)
+    destination_ranges = optional(list(string), [])
+    disabled           = optional(bool, false)
+    enable_logging = optional(object({
+      include_metadata = optional(bool)
+    }))
+    priority             = optional(number, 1000)
+    source_ranges        = optional(list(string))
+    sources              = optional(list(string))
+    targets              = optional(list(string))
+    use_service_accounts = optional(bool, false)
+    rules = optional(list(object({
+      protocol = string
+      ports    = optional(list(string))
+    })), [{ protocol = "all" }])
+  }))
+  default = null
+}
+
 variable "allowed_cidr_blocks" {
   type        = list(string)
   description = "CIDRs allowed for GKE master authorized networks and selected managed service access."
@@ -485,7 +508,7 @@ variable "enable_secret_manager" {
 }
 
 variable "custom_secrets" {
-  description = "List of custom secrets to create in Secret Manager. Non-manual secrets get generated passwords."
+  description = "List of custom secrets to create in Secret Manager. Multiple entries are supported. Entries with value create a secret version from that value; non-manual entries without value get generated passwords."
   type = list(object({
     secret_name      = string
     length           = optional(number)
