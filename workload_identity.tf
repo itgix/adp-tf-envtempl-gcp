@@ -27,4 +27,10 @@ resource "google_service_account_iam_member" "workload_identity_user" {
   service_account_id = module.workload_identity_service_accounts[each.key].name
   role               = "roles/iam.workloadIdentityUser"
   member             = local.workload_identity_members[each.key]
+
+  depends_on = [
+    module.gke_standard,
+    module.gke_autopilot,
+    module.gke_nodepool_primary,
+  ]
 }
