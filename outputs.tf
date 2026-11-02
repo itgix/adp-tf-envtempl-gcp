@@ -3,6 +3,26 @@ output "region_short" {
   value       = local.region_short
 }
 
+output "gcp_shared_gateway_enabled" {
+  description = "Whether GitOps should use the shared GCP Gateway instead of per-service Ingress resources."
+  value       = var.gcp_shared_gateway_enabled
+}
+
+output "gcp_gateway_address_name" {
+  description = "Reserved global address name for the GKE Gateway NamedAddress."
+  value       = try(google_compute_global_address.shared_gateway[0].name, null)
+}
+
+output "gcp_gateway_ip_address" {
+  description = "Public IPv4 address shared by all platform HTTP routes."
+  value       = try(google_compute_global_address.shared_gateway[0].address, null)
+}
+
+output "gcp_gateway_certificate_map" {
+  description = "Certificate Manager map name attached to the shared GKE Gateway."
+  value       = try(google_certificate_manager_certificate_map.shared_gateway[0].name, null)
+}
+
 output "gcp_project_id" {
   description = "GCP project ID."
   value       = var.gcp_project_id

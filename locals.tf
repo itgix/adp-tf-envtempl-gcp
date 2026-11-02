@@ -348,6 +348,7 @@ locals {
     local.create_memorystore_redis ? ["redis.googleapis.com", "servicenetworking.googleapis.com"] : [],
     local.create_pubsub ? ["pubsub.googleapis.com"] : [],
     local.create_firestore ? ["firestore.googleapis.com"] : [],
+    var.gcp_shared_gateway_enabled ? ["certificatemanager.googleapis.com"] : [],
     var.dns_managed_zone != "" || var.create_dns_managed_zone ? ["dns.googleapis.com"] : []
   )))
 }

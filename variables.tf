@@ -245,6 +245,17 @@ variable "dns_zone_description" {
   default     = "ADP managed DNS zone"
 }
 
+variable "gcp_shared_gateway_enabled" {
+  type        = bool
+  description = "Enable Gateway API and provision a shared public IP, wildcard DNS record, and Google-managed wildcard certificate for GitOps."
+  default     = false
+
+  validation {
+    condition     = !var.gcp_shared_gateway_enabled || (var.dns_managed_zone != "" && var.dns_main_domain != "" && var.dns_zone_visibility == "public")
+    error_message = "The shared GCP Gateway requires dns_managed_zone, dns_main_domain, and a public Cloud DNS zone."
+  }
+}
+
 #########################################################################
 ##                               GKE                                    ##
 #########################################################################

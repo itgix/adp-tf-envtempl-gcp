@@ -22,6 +22,61 @@ Google Cloud resources, primarily via Google Cloud Foundation Fabric modules.
 - Optional Firestore database.
 - Optional Cloud DNS managed zone creation/lookup.
 - Optional Cloud Armor security policy.
+- Optional shared GKE Gateway prerequisites: one global static public IPv4,
+  wildcard Cloud DNS A record, DNS authorization CNAME, and a Google-managed
+  wildcard certificate with its Certificate Manager map.
+
+## Shared GCP Gateway
+
+Set these keys in the installer environment YAML, using matching installer and
+GitOps templates that support the shared Gateway:
+
+```yaml
+gcp_shared_gateway_enabled: true
+dns_main_domain: "adp8d13.itgix.eu"
+dns_managed_zone: "adp8d13-test-itgix-eu"
+# Set true only when this template should create the zone.
+create_dns_managed_zone: true
+```
+
+The opt-in defaults to `false`, leaving existing deployments unchanged. When
+enabled, Terraform enables Gateway API on managed Standard/Autopilot clusters,
+adds `certificatemanager.googleapis.com` to required APIs, and creates the address,
+DNS records and one certificate for `*.dns_main_domain`. It exports
+`gcp_shared_gateway_enabled`, `gcp_gateway_address_name`, `gcp_gateway_ip_address`,
+and `gcp_gateway_certificate_map` into the installer's `infra-facts.yaml` contract.
+The matching GitOps template creates the actual Gateway/load balancer and routes;
+Terraform does not create Kubernetes resources or another load balancer.
+
+The selected zone must be public, contain the domain, and be delegated publicly
+from its parent. This template creates records in it, but does not change the
+parent domain's delegation. For an existing zone, leave `create_dns_managed_zone`
+false; shared mode reads and validates it regardless of `lookup_dns_managed_zone`.
+Certificate issuance/renewal relies on the authorization CNAME remaining publicly
+resolvable. Restrictive existing CAA records must also permit the issuing CA.
+The installer identity must be allowed to manage global addresses, DNS records,
+Certificate Manager resources, and API enablement (unless managed externally).
+
+A wildcard covers direct subdomains only, not the apex or nested names. The
+wildcard DNS record is Terraform-owned; no external-dns deployment is required
+for platform hostnames in this mode. Existing explicit A/CNAME records take
+precedence over wildcard DNS and must not keep pointing to old load balancers.
+Use a dedicated domain/subdomain per Gateway: two Terraform states must not own
+the same wildcard A record. The reserved IPv4 and global load balancer remain
+billable; backends and health checks are still separate resources per service.
+
+For an externally managed GKE cluster, enable its Standard-channel Gateway API
+and HTTP load-balancing add-on separately. Existing per-service GCE ingress
+migration can interrupt traffic: remove old ingresses before attaching the same
+Services to the Gateway. Apply the reviewed infrastructure plan before updating
+GitOps. The Google-managed certificate can remain provisioning until DNS is ready.
+No deployment or release-pin update is performed by these local template changes.
+
+Offline verification with installed modules/providers (no real state or credentials):
+
+```bash
+terraform validate
+```
 
 ## Custom Secrets
 
