@@ -76,7 +76,6 @@ Offline verification with installed modules/providers (no real state or credenti
 
 ```bash
 terraform validate
-terraform test -filter=tests/shared_gateway.tftest.hcl
 ```
 
 ## Custom Secrets
