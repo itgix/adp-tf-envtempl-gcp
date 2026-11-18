@@ -70,6 +70,7 @@ module "gke_standard" {
   }
   enable_features = {
     cost_management     = true
+    gateway_api         = var.gcp_shared_gateway_enabled
     dataplane_v2        = false
     fqdn_network_policy = false
     workload_identity   = true
@@ -88,7 +89,12 @@ module "gke_standard" {
     workload_metadata_config_mode = "GKE_METADATA"
   }
 
-  depends_on = [module.vpc]
+  # Keep Gateway prerequisites until the cluster and its load balancer are removed.
+  depends_on = [
+    module.vpc,
+    google_compute_global_address.shared_gateway,
+    google_certificate_manager_certificate_map_entry.shared_gateway,
+  ]
 }
 
 module "gke_nodepool_primary" {
@@ -179,6 +185,7 @@ module "gke_autopilot" {
   }
   enable_features = {
     cost_management   = true
+    gateway_api       = var.gcp_shared_gateway_enabled
     workload_identity = true
   }
   monitoring_config = {
@@ -189,5 +196,9 @@ module "gke_autopilot" {
     workload_metadata_config_mode = "GKE_METADATA"
   }
 
-  depends_on = [module.vpc]
+  depends_on = [
+    module.vpc,
+    google_compute_global_address.shared_gateway,
+    google_certificate_manager_certificate_map_entry.shared_gateway,
+  ]
 }

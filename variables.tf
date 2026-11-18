@@ -245,6 +245,29 @@ variable "dns_zone_description" {
   default     = "ADP managed DNS zone"
 }
 
+variable "gcp_shared_gateway_enabled" {
+  type        = bool
+  description = "Enable Gateway API and provision a shared public IP, wildcard DNS record, and Google-managed wildcard certificate for GitOps."
+  default     = false
+
+  validation {
+    condition     = !var.gcp_shared_gateway_enabled || (var.dns_managed_zone != "" && var.dns_main_domain != "" && var.dns_zone_visibility == "public")
+    error_message = "The shared GCP Gateway requires dns_managed_zone, dns_main_domain, and a public Cloud DNS zone."
+  }
+}
+
+variable "gcp_gateway_dns_ttl" {
+  type        = number
+  description = "TTL in seconds for the shared Gateway wildcard A and certificate authorization DNS records."
+  default     = 300
+  nullable    = false
+
+  validation {
+    condition     = var.gcp_gateway_dns_ttl >= 0 && var.gcp_gateway_dns_ttl <= 2147483647 && floor(var.gcp_gateway_dns_ttl) == var.gcp_gateway_dns_ttl
+    error_message = "gcp_gateway_dns_ttl must be an integer between 0 and 2147483647."
+  }
+}
+
 #########################################################################
 ##                               GKE                                    ##
 #########################################################################
