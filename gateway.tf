@@ -54,7 +54,7 @@ resource "google_dns_record_set" "shared_gateway_authorization" {
   managed_zone = data.google_dns_managed_zone.shared_gateway[0].name
   name         = google_certificate_manager_dns_authorization.shared_gateway[0].dns_resource_record[0].name
   type         = google_certificate_manager_dns_authorization.shared_gateway[0].dns_resource_record[0].type
-  ttl          = 300
+  ttl          = var.gcp_gateway_dns_ttl
   rrdatas      = [google_certificate_manager_dns_authorization.shared_gateway[0].dns_resource_record[0].data]
 }
 
@@ -99,6 +99,6 @@ resource "google_dns_record_set" "shared_gateway" {
   managed_zone = data.google_dns_managed_zone.shared_gateway[0].name
   name         = "*.${local.shared_gateway_domain}."
   type         = "A"
-  ttl          = 300
+  ttl          = var.gcp_gateway_dns_ttl
   rrdatas      = [google_compute_global_address.shared_gateway[0].address]
 }

@@ -256,6 +256,18 @@ variable "gcp_shared_gateway_enabled" {
   }
 }
 
+variable "gcp_gateway_dns_ttl" {
+  type        = number
+  description = "TTL in seconds for the shared Gateway wildcard A and certificate authorization DNS records."
+  default     = 300
+  nullable    = false
+
+  validation {
+    condition     = var.gcp_gateway_dns_ttl >= 0 && var.gcp_gateway_dns_ttl <= 2147483647 && floor(var.gcp_gateway_dns_ttl) == var.gcp_gateway_dns_ttl
+    error_message = "gcp_gateway_dns_ttl must be an integer between 0 and 2147483647."
+  }
+}
+
 #########################################################################
 ##                               GKE                                    ##
 #########################################################################
